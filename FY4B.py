@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+import argparse
 import datetime
 import logging
 import tempfile
@@ -16,34 +17,58 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from filelock import FileLock, Timeout
 from PIL import Image
 
+# ---------- 平台判定 ----------
+IS_WINDOWS = sys.platform.startswith("win")
+
 # ---------- 基本配置 ----------
 DOWNLOAD_URL = "http://img.nsmc.org.cn/CLOUDIMAGE/FY4B/AGRI/GCLR/FY4B_DISK_GCLR.JPG"
 
-HOME = os.environ["HOME"]
+# 数据源前有华为云 WAF，默认的 python-requests User-Agent 会被 418 拦截
+REQUEST_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"),
+    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+}
+
+# 用户主目录：Linux 读 $HOME，Windows 读 $USERPROFILE（HOME 在 Windows 上通常不存在）
+HOME = os.path.expanduser("~")
 
 
 def xdg_dir(env_name, fallback_subpath):
-    """返回 XDG 目录下的 fy4b 数据目录（尊重 XDG_*_HOME 环境变量）"""
+    """返回 XDG 目录下的 fy4b 数据目录（尊重 XDG_*_HOME 环境变量，仅 Linux 使用）"""
     base = os.environ.get(env_name) or os.path.join(HOME, fallback_subpath)
     return os.path.join(base, "fy4b")
 
 
-# 壁纸时间轴（XDG 数据目录，不放进用户图片目录）
-DATA_ROOT = xdg_dir("XDG_DATA_HOME", os.path.join(".local", "share"))
-TIMELINE_DIR = os.path.join(DATA_ROOT, "timeline")
+def localappdata_dir(fallback_subpath):
+    """返回 Windows 本地应用数据目录下的 fy4b 目录（尊重 %LOCALAPPDATA%）"""
+    base = os.environ.get("LOCALAPPDATA") or os.path.join(HOME, fallback_subpath)
+    return os.path.join(base, "fy4b")
 
-# 日志与锁（XDG 缓存目录）
-CACHE_ROOT = xdg_dir("XDG_CACHE_HOME", ".cache")
+
+if IS_WINDOWS:
+    # Windows：数据与缓存统一放在 %LOCALAPPDATA%\fy4b 下
+    #   时间轴 %LOCALAPPDATA%\fy4b\timeline
+    #   日志/锁 %LOCALAPPDATA%\fy4b\cache
+    DATA_ROOT = localappdata_dir(os.path.join("AppData", "Local"))
+    CACHE_ROOT = os.path.join(DATA_ROOT, "cache")
+else:
+    # 壁纸时间轴（XDG 数据目录，不放进用户图片目录）
+    DATA_ROOT = xdg_dir("XDG_DATA_HOME", os.path.join(".local", "share"))
+    # 日志与锁（XDG 缓存目录）
+    CACHE_ROOT = xdg_dir("XDG_CACHE_HOME", ".cache")
+
+TIMELINE_DIR = os.path.join(DATA_ROOT, "timeline")
 LOCK_FILE = os.path.join(CACHE_ROOT, "app.lock")
 LOG_FILE = os.path.join(CACHE_ROOT, "fy4b.log")
 
-# 临时下载放在系统临时目录 /tmp/fy4b：用完即删，
-# 即使进程异常退出，关机后系统（systemd-tmpfiles）也会回收
+# 临时下载放在系统临时目录（Linux /tmp/fy4b，Windows %TEMP%\fy4b）：用完即删，
+# 即使进程异常退出，关机后系统（Linux systemd-tmpfiles / Windows 磁盘清理）也会回收
 DOWNLOAD_DIR = os.path.join(tempfile.gettempdir(), "fy4b")
 # 旧版本曾把临时文件放在缓存目录下
 LEGACY_DOWNLOAD_DIR = os.path.join(CACHE_ROOT, "downloads")
 
-# 旧版本的时间轴位置（用于一次性迁移）
+# 旧版本的时间轴位置（用于一次性迁移；Windows 上不存在旧版本，判断会直接跳过）
 LEGACY_TIMELINE_DIR = os.path.join(HOME, "Pictures", "FY4B", "timeline")
 
 # 定义四个时间槽位（分钟）
@@ -66,10 +91,25 @@ lock = FileLock(LOCK_FILE, timeout=0)
 try:
     lock.acquire()
 except Timeout:
-    print("已有实例在运行，退出本次进程。")
+    # 窗口模式（PyInstaller --noconsole）下 sys.stdout 可能为 None
+    try:
+        print("已有实例在运行，退出本次进程。")
+    except Exception:
+        pass
     sys.exit(1)
 
 # ---------- 日志初始化 ----------
+if IS_WINDOWS:
+    # Windows 控制台/重定向默认使用本地编码（如 GBK），日志里的中文和特殊
+    # 字符会触发 UnicodeEncodeError，统一改成 UTF-8 输出
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            if _stream is not None:
+                _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
 def init_log():
     global logger
     logger = logging.getLogger("FY4B")
@@ -78,11 +118,15 @@ def init_log():
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
-    fh = logging.FileHandler(LOG_FILE)
+    # 日志文件固定用 UTF-8 写入（Windows 默认按本地编码写会乱码/报错）
+    fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
     fh.setLevel(logging.INFO)
     fh.setFormatter(formatter)
     logger.addHandler(fh)
-    ch = logging.StreamHandler()
+    # PyInstaller --noconsole 下 sys.stderr 可能为 None，回退到 devnull
+    stream = sys.stderr if sys.stderr is not None else open(
+        os.devnull, "w", encoding="utf-8", errors="replace")
+    ch = logging.StreamHandler(stream)
     ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
     logger.addHandler(ch)
@@ -98,9 +142,9 @@ def cleanup_downloads():
     """删除遗留的临时下载文件（崩溃/关机未清理的图片）"""
     removed = 0
     targets = [
-        (DOWNLOAD_DIR, None),          # 当前版本：/tmp/fy4b
-        (LEGACY_DOWNLOAD_DIR, None),   # 过渡版本：~/.cache/fy4b/downloads
-        (CACHE_ROOT, RAW_NAME_RE),     # 旧版本：~/.cache/fy4b/2026-..jpg
+        (DOWNLOAD_DIR, None),          # 当前版本：系统临时目录下的 fy4b
+        (LEGACY_DOWNLOAD_DIR, None),   # 过渡版本：缓存目录下的 downloads
+        (CACHE_ROOT, RAW_NAME_RE),     # 旧版本：缓存目录下的 2026-..jpg
     ]
 
     for directory, pattern in targets:
@@ -177,7 +221,8 @@ def download_wallpaper():
     while retry < max_retry:
         try:
             logger.info("开始下载 FY‑4B 云图...")
-            resp = requests.get(DOWNLOAD_URL, timeout=30)
+            resp = requests.get(DOWNLOAD_URL, timeout=30,
+                                headers=REQUEST_HEADERS)
             resp.raise_for_status()
             raw_name = time.strftime("%Y-%m-%d_%H-%M") + ".jpg"
             raw_path = os.path.join(DOWNLOAD_DIR, raw_name)
@@ -212,13 +257,55 @@ def remove_download(raw_path):
     except OSError as e:
         logger.warning(f"删除临时文件失败 {raw_path}: {e}")
 
-# ---------- 设置壁纸（支持 Linux Mint Cinnamon） ----------
+# ---------- 设置壁纸（Linux 桌面 / Windows） ----------
+# Windows 壁纸样式值：6 = Fit（保持比例缩放，等同 Linux 的 scaled），
+#                     10 = Fill（铺满裁剪，Windows 默认）
+WINDOWS_WALLPAPER_STYLE = "6"
+
+
+def set_wallpaper_windows(image_abs):
+    """Windows：先写样式注册表，再用 SystemParametersInfoW 设置壁纸"""
+    import ctypes
+    import winreg
+
+    SPI_SETDESKWALLPAPER = 0x0014
+    SPIF_UPDATEINIFILE = 0x01
+    SPIF_SENDCHANGE = 0x02
+
+    try:
+        # 样式必须先写好，紧随其后的 SPI 调用才会按新样式渲染
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop",
+            0, winreg.KEY_SET_VALUE
+        ) as key:
+            winreg.SetValueEx(key, "WallpaperStyle", 0, winreg.REG_SZ, WINDOWS_WALLPAPER_STYLE)
+            winreg.SetValueEx(key, "TileWallpaper", 0, winreg.REG_SZ, "0")
+
+        func = ctypes.windll.user32.SystemParametersInfoW
+        func.argtypes = (ctypes.c_uint, ctypes.c_uint, ctypes.c_wchar_p, ctypes.c_uint)
+        func.restype = ctypes.c_bool
+        ok = func(SPI_SETDESKWALLPAPER, 0, image_abs,
+                  SPIF_UPDATEINIFILE | SPIF_SENDCHANGE)
+        if not ok:
+            logger.error(f"SystemParametersInfoW 调用失败 (GetLastError={ctypes.GetLastError()})")
+            return False
+        logger.info(f"壁纸已设置为 {image_abs} (样式: fit)")
+        return True
+    except (OSError, AttributeError, TypeError, ValueError) as e:
+        logger.error(f"设置壁纸异常: {e}")
+        return False
+
+
 def set_wallpaper(image_path):
     if not os.path.exists(image_path):
         logger.warning(f"壁纸文件不存在: {image_path}")
         return False
 
     image_abs = os.path.abspath(image_path)
+
+    if IS_WINDOWS:
+        return set_wallpaper_windows(image_abs)
+
     desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
 
     try:
@@ -332,8 +419,93 @@ def watch_wake():
                 logger.error(f"唤醒处理失败: {e}", exc_info=True)
         last = now
 
+# ---------- 开机自启（Windows 注册表 Run 键） ----------
+AUTOSTART_NAME = "fy4b-wp"
+AUTOSTART_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
+
+def autostart_command():
+    """返回开机自启要执行的命令行（PyInstaller 单文件直接用自身路径）"""
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}"'
+    # 源码运行时优先用 pythonw.exe，避免登录时弹出控制台窗口
+    exe = sys.executable
+    if exe.lower().endswith("python.exe"):
+        pythonw = exe[:-len("python.exe")] + "pythonw.exe"
+        if os.path.exists(pythonw):
+            exe = pythonw
+    return f'"{exe}" "{os.path.abspath(__file__)}"'
+
+
+def register_autostart():
+    """把本程序写入 HKCU Run 键实现开机自启（幂等，重复启动只覆盖）"""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN_KEY,
+                            0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, AUTOSTART_NAME, 0, winreg.REG_SZ,
+                              autostart_command())
+        logger.info("已注册开机自启")
+        return True
+    except (OSError, ImportError) as e:
+        logger.warning(f"注册开机自启失败: {e}")
+        return False
+
+
+def unregister_autostart():
+    """从 HKCU Run 键移除开机自启项（项不存在时静默通过）"""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_RUN_KEY,
+                            0, winreg.KEY_SET_VALUE) as key:
+            try:
+                winreg.DeleteValue(key, AUTOSTART_NAME)
+            except FileNotFoundError:
+                pass
+        logger.info("已移除开机自启项")
+        return True
+    except (OSError, ImportError) as e:
+        logger.warning(f"移除开机自启项失败: {e}")
+        return False
+
+
+# ---------- 命令行参数 ----------
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="fy4b-wp",
+        description="下载 FY-4B 云图并设置为桌面壁纸")
+    parser.add_argument("--once", action="store_true",
+                        help="只执行一次更新后退出（用于测试）")
+    parser.add_argument("--remove-autostart", action="store_true",
+                        help="移除开机自启项后退出（仅 Windows）")
+    return parser.parse_args(argv)
+
+
 # ---------- 主程序 ----------
-if __name__ == "__main__":
+scheduler = None
+
+
+def main(argv=None):
+    global scheduler
+    args = parse_args(argv)
+
+    if args.remove_autostart:
+        if IS_WINDOWS:
+            unregister_autostart()
+        else:
+            logger.info("Linux 的开机自启由 deb 包（/etc/xdg/autostart）管理，无需代码处理")
+        return 0
+
+    if args.once:
+        # 测试模式：只跑一次更新，不注册自启也不启动调度器
+        update()
+        shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
+        return 0
+
+    if IS_WINDOWS:
+        # Windows 没有 deb 那样的系统级 autostart，启动时自动注册到 HKCU Run 键
+        register_autostart()
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(
         update,
@@ -361,4 +533,8 @@ if __name__ == "__main__":
         # 正常退出时清空临时目录
         shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
         lock.release()
-        sys.exit(0)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
