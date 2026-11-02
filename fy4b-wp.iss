@@ -37,7 +37,6 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist
 OutputBaseFilename=fy4b-wp-setup
-SetupIconFile=assets\icon.ico
 UninstallDisplayIcon={app}\fy4b-wp.exe
 UninstallDisplayName={#MyAppName}
 Compression=lzma2

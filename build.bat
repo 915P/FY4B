@@ -12,7 +12,7 @@ if exist dist rmdir /s /q dist
 if exist "%APP_NAME%.spec" del /q "%APP_NAME%.spec"
 
 echo ==^> 编译单文件 exe ...
-pyinstaller --onefile --noconsole --icon assets\icon.ico --name %APP_NAME% FY4B.py
+pyinstaller --onefile --noconsole --name %APP_NAME% FY4B.py
 if not exist "dist\%APP_NAME%.exe" (
     echo 错误：编译失败，未找到 dist\%APP_NAME%.exe
     exit /b 1

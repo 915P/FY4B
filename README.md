@@ -132,7 +132,6 @@ bash build.sh
 
 - `dist\fy4b-wp.exe`：单文件 exe（无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`）
 - `dist\fy4b-wp-setup.exe`：图形安装包（需要 [Inno Setup 6](https://jrsoftware.org/isinfo.php)，未安装则跳过该步）
-- 应用图标来自 `assets\icon.ico`（用卫星云图生成），`build.bat` 会自动带上 `--icon`
 
 ### 发布（Windows + Linux 双版本）
 
