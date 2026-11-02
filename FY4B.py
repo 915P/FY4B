@@ -7,6 +7,7 @@ import sys
 import time
 import datetime
 import logging
+import tempfile
 import threading
 import shutil
 
@@ -31,11 +32,16 @@ def xdg_dir(env_name, fallback_subpath):
 DATA_ROOT = xdg_dir("XDG_DATA_HOME", os.path.join(".local", "share"))
 TIMELINE_DIR = os.path.join(DATA_ROOT, "timeline")
 
-# 日志与临时下载（XDG 缓存目录）
+# 日志与锁（XDG 缓存目录）
 CACHE_ROOT = xdg_dir("XDG_CACHE_HOME", ".cache")
-DOWNLOAD_DIR = os.path.join(CACHE_ROOT, "downloads")
 LOCK_FILE = os.path.join(CACHE_ROOT, "app.lock")
 LOG_FILE = os.path.join(CACHE_ROOT, "fy4b.log")
+
+# 临时下载放在系统临时目录 /tmp/fy4b：用完即删，
+# 即使进程异常退出，关机后系统（systemd-tmpfiles）也会回收
+DOWNLOAD_DIR = os.path.join(tempfile.gettempdir(), "fy4b")
+# 旧版本曾把临时文件放在缓存目录下
+LEGACY_DOWNLOAD_DIR = os.path.join(CACHE_ROOT, "downloads")
 
 # 旧版本的时间轴位置（用于一次性迁移）
 LEGACY_TIMELINE_DIR = os.path.join(HOME, "Pictures", "FY4B", "timeline")
@@ -48,8 +54,12 @@ Image.MAX_IMAGE_PIXELS = 300000000
 
 # ---------- 创建必要目录 ----------
 os.makedirs(CACHE_ROOT, exist_ok=True)
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(TIMELINE_DIR, exist_ok=True)
+try:
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    os.chmod(DOWNLOAD_DIR, 0o700)  # 临时图片仅本人可读
+except OSError:
+    pass
 
 # ---------- 单实例锁 ----------
 lock = FileLock(LOCK_FILE, timeout=0)
@@ -87,10 +97,11 @@ RAW_NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.jpg$")
 def cleanup_downloads():
     """删除遗留的临时下载文件（崩溃/关机未清理的图片）"""
     removed = 0
-    # 新版：临时文件统一放在 downloads/ 子目录
-    targets = [(DOWNLOAD_DIR, None)]
-    # 旧版：临时文件直接写在缓存根目录
-    targets.append((CACHE_ROOT, RAW_NAME_RE))
+    targets = [
+        (DOWNLOAD_DIR, None),          # 当前版本：/tmp/fy4b
+        (LEGACY_DOWNLOAD_DIR, None),   # 过渡版本：~/.cache/fy4b/downloads
+        (CACHE_ROOT, RAW_NAME_RE),     # 旧版本：~/.cache/fy4b/2026-..jpg
+    ]
 
     for directory, pattern in targets:
         try:
@@ -102,8 +113,8 @@ def cleanup_downloads():
                     continue
                 os.remove(path)
                 removed += 1
-        except OSError as e:
-            logger.warning(f"清理临时下载目录 {directory} 失败: {e}")
+        except OSError:
+            continue
     if removed:
         logger.info(f"已清理 {removed} 个遗留临时下载文件")
 
@@ -347,5 +358,7 @@ if __name__ == "__main__":
         logger.info("收到中断信号，正在关闭调度器...")
         scheduler.shutdown()
         logger.info("调度器已关闭")
+        # 正常退出时清空临时目录
+        shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
         lock.release()
         sys.exit(0)
