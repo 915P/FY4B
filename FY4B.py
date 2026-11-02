@@ -87,16 +87,24 @@ except OSError:
     pass
 
 # ---------- 单实例锁 ----------
-lock = FileLock(LOCK_FILE, timeout=0)
-try:
-    lock.acquire()
-except Timeout:
-    # 窗口模式（PyInstaller --noconsole）下 sys.stdout 可能为 None
+# 维护类参数（看帮助 / 移除自启）允许在已有实例运行时执行，不参与抢锁：
+# 否则"运行中卸载"会卡在抢锁这一步直接退出，自启项删不掉，
+# 留下一条指向已删除 exe 的僵尸自启项
+MAINTENANCE_ARGS = ("--remove-autostart", "-h", "--help")
+MAINTENANCE_MODE = any(a in sys.argv[1:] for a in MAINTENANCE_ARGS)
+
+lock = None
+if not MAINTENANCE_MODE:
+    lock = FileLock(LOCK_FILE, timeout=0)
     try:
-        print("已有实例在运行，退出本次进程。")
-    except Exception:
-        pass
-    sys.exit(1)
+        lock.acquire()
+    except Timeout:
+        # 窗口模式（PyInstaller --noconsole）下 sys.stdout 可能为 None
+        try:
+            print("已有实例在运行，退出本次进程。")
+        except Exception:
+            pass
+        sys.exit(1)
 
 # ---------- 日志初始化 ----------
 if IS_WINDOWS:
@@ -193,8 +201,10 @@ def migrate_legacy_timeline():
         logger.info(f"已将 {moved} 张旧壁纸从 {LEGACY_TIMELINE_DIR} 迁移至 {TIMELINE_DIR}")
 
 
-cleanup_downloads()
-migrate_legacy_timeline()
+if not MAINTENANCE_MODE:
+    # 维护模式（看帮助/移除自启）不清理：避免和正在运行的实例抢临时下载文件
+    cleanup_downloads()
+    migrate_legacy_timeline()
 
 # ---------- 获取当前时间所属槽位 ----------
 def get_time_slot():
@@ -532,7 +542,8 @@ def main(argv=None):
         logger.info("调度器已关闭")
         # 正常退出时清空临时目录
         shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
-        lock.release()
+        if lock is not None:
+            lock.release()
     return 0
 
 

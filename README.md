@@ -47,7 +47,8 @@ sudo apt install -f   # 补齐依赖
 ```
 
 安装后随桌面会话自动启动（`/etc/xdg/autostart`），每小时的 10/25/40/55 分更新壁纸。
-卸载：`sudo dpkg -r fy4b-wp`
+
+卸载：`sudo dpkg -r fy4b-wp`；如需彻底清理，再删除 `~/.local/share/fy4b` 与 `~/.cache/fy4b`。
 
 ### Windows：单文件 exe（推荐）
 
@@ -60,7 +61,13 @@ sudo apt install -f   # 补齐依赖
 > exe 未做代码签名，SmartScreen 或部分杀毒软件可能拦截：点「更多信息」→「仍要运行」即可。
 
 停止运行：任务管理器结束 `fy4b-wp` 进程，或 `taskkill /IM fy4b-wp.exe /F`。
-卸载：先 `fy4b-wp.exe --remove-autostart` 移除开机自启项，再删除 exe。
+
+卸载：
+
+1. `fy4b-wp.exe --remove-autostart` —— 移除开机自启项（**程序运行中也可直接执行**）
+2. 结束 `fy4b-wp` 进程
+3. 删除 exe
+4. 如需彻底清理：删除数据目录 `%LOCALAPPDATA%\fy4b`（壁纸时间轴与日志）
 
 ### 源码运行（Linux / Windows）
 
