@@ -28,7 +28,7 @@
 
 ### 通过 deb 包安装（推荐）
 
-从 [Releases](https://github.com/USER/FY4B/releases) 下载最新 `.deb` 包：
+从 [Releases](https://github.com/915P/FY4B/releases) 下载最新 `.deb` 包：
 
 ```bash
 sudo dpkg -i fy4b-wp_*.deb
@@ -40,6 +40,8 @@ sudo apt install -f   # 安装依赖
 ### 手动运行
 
 ```bash
+git clone https://github.com/915P/FY4B.git
+cd FY4B
 pip install -r requirements.txt
 python3 FY4B.py
 ```
