@@ -1,0 +1,4 @@
+requests>=2.28
+APScheduler>=3.10
+filelock>=3.0
+Pillow>=9.0

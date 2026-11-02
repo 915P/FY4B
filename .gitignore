@@ -1,0 +1,15 @@
+# --- Build artifacts ---
+*.deb
+dist/
+build/
+build_deb/
+
+# --- Generated files ---
+fy4b-wp.spec
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
