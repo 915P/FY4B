@@ -13,3 +13,8 @@ __pycache__/
 *.pyo
 *.egg-info/
 .eggs/
+
+# --- Agent 本地文档（不入库）---
+AGENTS.md
+# --- FUSE/NTFS 挂载残留（Windows 副本目录）---
+.fuse_hidden*
