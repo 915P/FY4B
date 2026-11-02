@@ -37,40 +37,44 @@
 
 ## 安装
 
-### 通过 deb 包安装（推荐）
+### Linux：deb 包（推荐）
 
-从 [Releases](https://github.com/915P/FY4B/releases) 下载最新 `.deb` 包：
+从 [Releases](https://github.com/915P/FY4B/releases) 下载 `fy4b-wp_<版本>_amd64.deb`：
 
 ```bash
 sudo dpkg -i fy4b-wp_*.deb
-sudo apt install -f   # 安装依赖
+sudo apt install -f   # 补齐依赖
 ```
 
-安装后服务会自动启动，每 15 分钟更新壁纸。
+安装后随桌面会话自动启动（`/etc/xdg/autostart`），每小时的 10/25/40/55 分更新壁纸。
+卸载：`sudo dpkg -r fy4b-wp`
 
-### 手动运行
+### Windows：单文件 exe（推荐）
+
+从 [Releases](https://github.com/915P/FY4B/releases) 下载 `fy4b-wp.exe`：
+
+1. **先放到固定位置再运行**（例如 `C:\fy4b\fy4b-wp.exe`）。首次运行会把当时的完整路径写入注册表自启，之后再移动 exe 会让开机自启失效（重新运行一次即可覆盖为新路径）
+2. 双击运行：立即下载云图并设置为壁纸，同时自动写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `fy4b-wp`）实现开机自启
+3. 程序无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`
+
+> exe 未做代码签名，SmartScreen 或部分杀毒软件可能拦截：点「更多信息」→「仍要运行」即可。
+
+停止运行：任务管理器结束 `fy4b-wp` 进程，或 `taskkill /IM fy4b-wp.exe /F`。
+卸载：先 `fy4b-wp.exe --remove-autostart` 移除开机自启项，再删除 exe。
+
+### 源码运行（Linux / Windows）
+
+需要 Python 3.10+：
 
 ```bash
 git clone https://github.com/915P/FY4B.git
 cd FY4B
 pip install -r requirements.txt
-python3 FY4B.py
+python3 FY4B.py      # Linux（Windows 把这行换成 python FY4B.py）
 ```
 
-### Windows
-
-需要 Python 3.10+：
-
-```powershell
-git clone https://github.com/915P/FY4B.git
-cd FY4B
-pip install -r requirements.txt
-python FY4B.py
-```
-
-- 首次以正常模式启动时会自动把 `fy4b-wp` 写入 `HKCU\...\CurrentVersion\Run` 实现开机自启
-- 壁纸样式为 Fit（保持比例缩放，等同 Linux 的 `scaled`），需要改样式可调 `FY4B.py` 里的 `WINDOWS_WALLPAPER_STYLE`（`10` = Fill 铺满裁剪）
-- 也可以打包成单文件 exe：`build.bat`（产物 `dist\fy4b-wp.exe`），或手动执行 `pyinstaller --onefile --noconsole --name fy4b-wp FY4B.py`
+- Windows 以正常模式启动时会自动注册开机自启；Linux 的开机运行由 deb 包的 autostart 负责，源码运行需自行保证开机拉起
+- Windows 壁纸样式默认 Fit（保持比例缩放，等同 Linux 的 `scaled`），想改成铺满裁剪可把 `FY4B.py` 里的 `WINDOWS_WALLPAPER_STYLE` 改为 `"10"`
 
 ### 命令行参数
 
@@ -88,7 +92,7 @@ python FY4B.py
 bash build.sh
 ```
 
-产物在 `dist/` 目录下。
+产物为仓库根目录下的 `fy4b-wp_<版本>_amd64.deb`，PyInstaller 中间产物在 `dist/`。
 
 ### exe（Windows）
 
@@ -97,6 +101,21 @@ bash build.sh
 ```
 
 产物为 `dist\fy4b-wp.exe`（无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`）。
+
+### 发布（Windows + Linux 双版本）
+
+两个平台的产物挂在同一个 Release 上：
+
+1. **Windows 侧**：`.\build.bat` 得到 `dist\fy4b-wp.exe`，拷到 Linux 机器
+2. **Linux 侧**：`bash build.sh` 得到 `./fy4b-wp_<版本>_amd64.deb`
+3. 一起发布（需已登录 `gh` CLI）：
+
+```bash
+gh release create v<版本> ./fy4b-wp_<版本>_amd64.deb dist/fy4b-wp.exe \
+    --title "FY4B Wallpaper <版本>" --notes "..."
+```
+
+发版前记得同步 `build.sh` 里的 `VERSION`。
 
 ## 技术原理
 
