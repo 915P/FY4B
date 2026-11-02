@@ -50,19 +50,42 @@ sudo apt install -f   # 补齐依赖
 
 卸载：`sudo dpkg -r fy4b-wp`；如需彻底清理，再删除 `~/.local/share/fy4b` 与 `~/.cache/fy4b`。
 
-### Windows：单文件 exe（推荐）
+### Windows：安装程序（推荐）
 
-从 [Releases](https://github.com/915P/FY4B/releases) 下载 `fy4b-wp.exe`：
+从 [Releases](https://github.com/915P/FY4B/releases) 下载 `fy4b-wp-setup.exe`，双击运行：
 
-1. **先放到固定位置再运行**（例如 `C:\fy4b\fy4b-wp.exe`）。首次运行会把当时的完整路径写入注册表自启，之后再移动 exe 会让开机自启失效（重新运行一次即可覆盖为新路径）
-2. 双击运行：立即下载云图并设置为壁纸，同时自动写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `fy4b-wp`）实现开机自启
-3. 程序无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`
+1. 图形安装向导（简体中文）：可自选安装位置，默认 `%LOCALAPPDATA%\Programs\fy4b`，**按用户安装、不需要管理员权限**
+2. 可选任务：创建桌面快捷方式、开机自动启动（默认勾选）
+3. 完成后可勾选「立即运行 FY4B 云图壁纸」
+
+安装后：
+
+- 开始菜单与桌面（可选）都有「FY4B 云图壁纸」快捷方式
+- 出现在「设置 → 应用 → 已安装的应用」里，可由系统直接卸载
+- 程序无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`
+
+卸载：`设置 → 应用 → FY4B 云图壁纸 → 卸载`（或运行安装目录下的 `unins000.exe`）。
+卸载会自动结束进程、移除开机自启项；数据目录 `%LOCALAPPDATA%\fy4b` 默认保留，要彻底清理可手动删除。
+
+静默安装/卸载（供脚本使用）：
+
+```powershell
+.\fy4b-wp-setup.exe /VERYSILENT /NORESTART                                    # 安装
+& "$env:LOCALAPPDATA\Programs\fy4b\unins000.exe" /VERYSILENT /NORESTART        # 卸载
+```
 
 > exe 未做代码签名，SmartScreen 或部分杀毒软件可能拦截：点「更多信息」→「仍要运行」即可。
 
+### Windows：单文件 exe（免安装）
+
+只想解压即用也可以，直接下载 `fy4b-wp.exe`：
+
+1. **先放到固定位置再运行**（例如 `C:\fy4b\fy4b-wp.exe`）。首次运行会把当时的完整路径写入注册表自启，之后再移动 exe 会让开机自启失效（重新运行一次即可覆盖为新路径）
+2. 双击运行：立即下载云图并设置为壁纸，同时自动写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `fy4b-wp`）实现开机自启
+
 停止运行：任务管理器结束 `fy4b-wp` 进程，或 `taskkill /IM fy4b-wp.exe /F`。
 
-卸载：
+卸载（免安装版）：
 
 1. `fy4b-wp.exe --remove-autostart` —— 移除开机自启项（**程序运行中也可直接执行**）
 2. 结束 `fy4b-wp` 进程
@@ -101,24 +124,27 @@ bash build.sh
 
 产物为仓库根目录下的 `fy4b-wp_<版本>_amd64.deb`，PyInstaller 中间产物在 `dist/`。
 
-### exe（Windows）
+### exe + 安装包（Windows）
 
 ```powershell
 .\build.bat
 ```
 
-产物为 `dist\fy4b-wp.exe`（无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`）。
+- `dist\fy4b-wp.exe`：单文件 exe（无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`）
+- `dist\fy4b-wp-setup.exe`：图形安装包（需要 [Inno Setup 6](https://jrsoftware.org/isinfo.php)，未安装则跳过该步）
+- 应用图标来自 `assets\icon.ico`（用卫星云图生成），`build.bat` 会自动带上 `--icon`
 
 ### 发布（Windows + Linux 双版本）
 
 两个平台的产物挂在同一个 Release 上：
 
-1. **Windows 侧**：`.\build.bat` 得到 `dist\fy4b-wp.exe`，拷到 Linux 机器
+1. **Windows 侧**：`.\build.bat` 得到 `dist\fy4b-wp.exe` 与 `dist\fy4b-wp-setup.exe`，拷到 Linux 机器
 2. **Linux 侧**：`bash build.sh` 得到 `./fy4b-wp_<版本>_amd64.deb`
 3. 一起发布（需已登录 `gh` CLI）：
 
 ```bash
-gh release create v<版本> ./fy4b-wp_<版本>_amd64.deb dist/fy4b-wp.exe \
+gh release create v<版本> ./fy4b-wp_<版本>_amd64.deb \
+    dist/fy4b-wp.exe dist/fy4b-wp-setup.exe \
     --title "FY4B Wallpaper <版本>" --notes "..."
 ```
 
