@@ -52,29 +52,22 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-[Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "autostart"; Description: "开机自动启动（登录后每 15 分钟自动更新壁纸）"; GroupDescription: "启动方式:"
-
 [Files]
 Source: "dist\fy4b-wp.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-[Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; \
-    WorkingDir: "{app}"; Comment: "下载 FY-4B 卫星云图并设置为桌面壁纸"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; \
-    WorkingDir: "{app}"; Tasks: desktopicon
+; 刻意不写 [Icons] / [Tasks]：不创建桌面与开始菜单快捷方式，
+; 也不给用户勾选项，装完直接在后台静默运行
 
 [Registry]
 ; 开机自启（与程序自身写入的 HKCU Run 值名保持一致：fy4b-wp）
+; 无任务选项，始终注册；卸载时自动删除该值
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueType: string; ValueName: "fy4b-wp"; ValueData: """{app}\{#MyAppExeName}"""; \
-    Flags: uninsdeletevalue; Tasks: autostart
+    Flags: uninsdeletevalue
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; \
-    Description: "{cm:LaunchProgram,{#MyAppName}}"; \
-    Flags: nowait postinstall skipifsilent
+; 安装一结束就在后台启动（无勾选框，静默安装同样生效）
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runhidden
 
 [UninstallRun]
 ; 卸载前先结束进程，否则 exe 被占用无法删除
