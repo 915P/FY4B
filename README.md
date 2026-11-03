@@ -140,13 +140,17 @@ bash build.sh
 
 ### 发布（Windows + Linux 双版本）
 
-两个平台的产物挂在同一个 Release 上：
+两个平台的产物挂在同一个 Release 上。
+**注意：`build.sh` 开头会 `rm -rf dist/`**——如果两边用的是同一个目录（Windows 分区挂载），
+跑构建前先把 Windows 产物挪到仓库外，否则会被清掉：
 
-1. **Windows 侧**：`.\build.bat` 得到 `dist\fy4b-wp.exe` 与 `dist\fy4b-wp-setup.exe`，拷到 Linux 机器
-2. **Linux 侧**：`bash build.sh` 得到 `./fy4b-wp_<版本>_amd64.deb`
-3. 一起发布（需已登录 `gh` CLI）：
+1. **Windows 侧**：`.\build.bat` 得到 `dist\fy4b-wp.exe` 与 `dist\fy4b-wp-setup.exe`
+   （先备份到仓库外，例如 `../FY4B-release/`）
+2. **Linux 侧**：`bash build.sh` → `./fy4b-wp_<版本>_amd64.deb`（**此步会清空 `dist/`**）
+3. 把备份的两个 Windows 产物拷回 `dist/`，一起发布（需已登录 `gh` CLI）：
 
 ```bash
+cp ../FY4B-release/fy4b-wp*.exe dist/
 gh release create v<版本> ./fy4b-wp_<版本>_amd64.deb \
     dist/fy4b-wp.exe dist/fy4b-wp-setup.exe \
     --title "FY4B Wallpaper <版本>" --notes "..."
