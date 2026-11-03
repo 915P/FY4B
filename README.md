@@ -157,7 +157,13 @@ gh release create v<版本> ./fy4b-wp_<版本>_amd64.deb \
 
 ## 测试
 
-回归测试在 `tests/`（需 Windows + 联网）：
+回归测试在 `tests/`：
+
+```bash
+# Linux（22 项：三项基础验证 + XDG 路径 + 命令行参数 + 单实例锁）
+# 自带环境隔离：独立 HOME/TMPDIR + 假 gsettings，无需停守护进程，也不会真改壁纸
+python3 tests/test_linux_support.py
+```
 
 ```powershell
 python tests/test_windows_support.py                # 39 项：代码与平台层
@@ -165,7 +171,7 @@ powershell -File tests\test_windows_install.ps1     # 26 项：免安装 exe 生
 powershell -File tests\test_installer.ps1           # 34 项：安装包（含零残留卸载）
 ```
 
-跑第一个前先停掉正在运行的 `fy4b-wp`（单实例锁）；后两个会自己停、卸、装，结束后程序留在运行状态。
+Linux 脚本随时可跑（需联网下载云图）；Windows 前两个跑之前先停掉正在运行的 `fy4b-wp`（单实例锁），后两个会自己停、卸、装，结束后程序留在运行状态。
 
 ## 技术原理
 
