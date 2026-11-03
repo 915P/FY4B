@@ -52,19 +52,20 @@ sudo apt install -f   # 补齐依赖
 
 ### Windows：安装程序（推荐）
 
-从 [Releases](https://github.com/915P/FY4B/releases) 下载 `fy4b-wp-setup.exe`，双击运行：
+从 [Releases](https://github.com/915P/FY4B/releases) 下载 `fy4b-wp-setup.exe`，双击运行，一路「下一步」即可：
 
-1. 图形安装向导（简体中文）：可自选安装位置，默认 `%LOCALAPPDATA%\Programs\fy4b`，**按用户安装、不需要管理员权限**
-2. 可选任务：创建桌面快捷方式、开机自动启动（默认勾选）
-3. 完成后可勾选「立即运行 FY4B 云图壁纸」
+- 图形安装向导（简体中文），默认装到 `%LOCALAPPDATA%\Programs\fy4b`，**按用户安装、不需要管理员权限**
+- **不创建任何快捷方式**（桌面、开始菜单都没有），也没有勾选页
+- 装完立即在后台静默启动，开机自启自动注册（无选项）
 
 安装后：
 
-- 开始菜单与桌面（可选）都有「FY4B 云图壁纸」快捷方式
+- 程序在后台安静运行，每小时的 10/25/40/55 分自动换图，全程无窗口
 - 出现在「设置 → 应用 → 已安装的应用」里，可由系统直接卸载
-- 程序无控制台窗口，日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`
+- 日志见 `%LOCALAPPDATA%\fy4b\cache\fy4b.log`
+- 想手动启动：直接运行 `%LOCALAPPDATA%\Programs\fy4b\fy4b-wp.exe`（单实例，重复运行会自动退出）
 
-卸载：`设置 → 应用 → FY4B 云图壁纸 → 卸载`（或运行安装目录下的 `unins000.exe`）。
+卸载：`设置 → 应用 → FY4B 云图壁纸 → 卸载`（或安装目录下的 `unins000.exe`，**程序运行中也能卸**）。
 卸载会自动结束进程、移除开机自启项；数据目录 `%LOCALAPPDATA%\fy4b` 默认保留，要彻底清理可手动删除。
 
 静默安装/卸载（供脚本使用）：
