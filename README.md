@@ -140,23 +140,32 @@ bash build.sh
 
 ### 发布（Windows + Linux 双版本）
 
-两个平台的产物挂在同一个 Release 上。
-**注意：`build.sh` 开头会 `rm -rf dist/`**——如果两边用的是同一个目录（Windows 分区挂载），
-跑构建前先把 Windows 产物挪到仓库外，否则会被清掉：
+两个平台的产物都落在 `dist/`，**互不清掉**（`build.sh` 只清理 `build_deb/`、`build/` 与 `.spec`；
+Linux 产物是 `dist/fy4b-wp`，与 Windows 的 `fy4b-wp.exe` / `fy4b-wp-setup.exe` 不同名）：
 
-1. **Windows 侧**：`.\build.bat` 得到 `dist\fy4b-wp.exe` 与 `dist\fy4b-wp-setup.exe`
-   （先备份到仓库外，例如 `../FY4B-release/`）
-2. **Linux 侧**：`bash build.sh` → `./fy4b-wp_<版本>_amd64.deb`（**此步会清空 `dist/`**）
-3. 把备份的两个 Windows 产物拷回 `dist/`，一起发布（需已登录 `gh` CLI）：
+1. **Windows 侧**：`.\build.bat` → `dist\fy4b-wp.exe` + `dist\fy4b-wp-setup.exe`
+2. **Linux 侧**：`bash build.sh` → `./fy4b-wp_<版本>_amd64.deb`
+3. 一起发布（需已登录 `gh` CLI）：
 
 ```bash
-cp ../FY4B-release/fy4b-wp*.exe dist/
 gh release create v<版本> ./fy4b-wp_<版本>_amd64.deb \
     dist/fy4b-wp.exe dist/fy4b-wp-setup.exe \
     --title "FY4B Wallpaper <版本>" --notes "..."
 ```
 
 发版前记得同步 `build.sh` 里的 `VERSION`。
+
+## 测试
+
+回归测试在 `tests/`（需 Windows + 联网）：
+
+```powershell
+python tests/test_windows_support.py                # 39 项：代码与平台层
+powershell -File tests\test_windows_install.ps1     # 26 项：免安装 exe 生命周期
+powershell -File tests\test_installer.ps1           # 34 项：安装包（含零残留卸载）
+```
+
+跑第一个前先停掉正在运行的 `fy4b-wp`（单实例锁）；后两个会自己停、卸、装，结束后程序留在运行状态。
 
 ## 技术原理
 

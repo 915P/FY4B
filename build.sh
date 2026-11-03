@@ -14,7 +14,12 @@ DEB_DIR="${BUILD_DIR}/${APP_NAME}_${VERSION}_${ARCH}"
 DIST_DIR="dist"
 
 # 清理旧构建
-rm -rf "$BUILD_DIR" "$DIST_DIR"
+# 注意：不清理 dist/ —— 本仓库目录可能与 Windows 共用（挂载共享），
+# dist/ 里躺着 Windows 打好的 fy4b-wp.exe 与 fy4b-wp-setup.exe，
+# 清掉就无法从 git 恢复（它们是被忽略的产物）。
+# Linux 产物文件名是 dist/fy4b-wp（无扩展名），与 Windows 的 .exe 不冲突，
+# pyinstaller 每次都会覆盖写入，无需预清。
+rm -rf "$BUILD_DIR" build "${APP_NAME}.spec"
 mkdir -p "$DEB_DIR/DEBIAN"
 mkdir -p "$DEB_DIR/usr/local/bin"
 mkdir -p "$DEB_DIR/etc/xdg/autostart"

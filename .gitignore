@@ -1,5 +1,6 @@
 # --- Build artifacts ---
 *.deb
+*.exe
 dist/
 build/
 build_deb/
