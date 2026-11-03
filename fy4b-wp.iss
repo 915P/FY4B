@@ -78,5 +78,52 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "--remove-autostart"; \
     RunOnceId: "RemoveAutostart"; Flags: runhidden waituntilterminated
 
 [UninstallDelete]
-; 只清理安装目录里可能残留的文件；用户数据（%LOCALAPPDATA%\fy4b 壁纸时间轴与日志）保留
+; 彻底清理，不留残余：安装目录 + 数据目录（壁纸时间轴 + 日志）
+; 顺序说明：[UninstallRun] 会先执行（结束进程、移除自启），
+; 之后才删除这些文件，所以不会遇到文件被占用
+; （临时下载目录 %TEMP%\fy4b 在下面的 [Code] 里按实际 TEMP 环境变量删）
 Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{localappdata}\fy4b"
+
+[Code]
+// 卸载收尾：清理临时下载目录，并把壁纸换回系统默认、还原我们写过的样式值，
+// 避免卸载后桌面壁纸指向已被删除的图片（重启会变黑屏）
+function SystemParametersInfoW(uiAction: Integer; uiParam: Integer;
+  pvParam: String; fWinIni: Integer): Integer;
+  external 'SystemParametersInfoW@user32.dll stdcall';
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  CurrentWallpaper, Fallback, TempDir: String;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    Exit;
+
+  // 清掉临时下载目录（用真实 TEMP，兼容用户重定向 TEMP 的情况）
+  TempDir := GetEnv('TEMP');
+  if TempDir <> '' then
+    DelTree(TempDir + '\fy4b', True, True, True);
+
+  CurrentWallpaper := '';
+  RegQueryStringValue(HKCU, 'Control Panel\Desktop', 'Wallpaper', CurrentWallpaper);
+
+  // 只在当前壁纸确实已经不存在（= 我们刚删掉的那张）时才动桌面设置；
+  // 用户中途换过壁纸就不要打扰他
+  if (CurrentWallpaper <> '') and (not FileExists(CurrentWallpaper)) then
+  begin
+    Fallback := ExpandConstant('{win}\Web\Wallpaper\Windows\img0.jpg');
+    if not FileExists(Fallback) then
+      Fallback := ExpandConstant('{win}\Web\Wallpaper\img0.jpg');
+    if not FileExists(Fallback) then
+      Fallback := ExpandConstant('{win}\Web\Screen\img102.jpg');
+    if FileExists(Fallback) then
+    begin
+      RegWriteStringValue(HKCU, 'Control Panel\Desktop', 'Wallpaper', Fallback);
+      // SPI_SETDESKWALLPAPER = 0x0014，SPIF_UPDATEINIFILE|SPIF_SENDCHANGE = 3
+      SystemParametersInfoW($0014, 0, Fallback, 3);
+      // 还原成系统默认样式（去掉我们写入的 Fit=6）
+      RegDeleteValue(HKCU, 'Control Panel\Desktop', 'WallpaperStyle');
+      RegDeleteValue(HKCU, 'Control Panel\Desktop', 'TileWallpaper');
+    end;
+  end;
+end;
